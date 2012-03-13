@@ -26,11 +26,11 @@
 - (void)start
 {
     if (self.isCancelled) {
-        self.state = FINISHED;
+        self.state = kOperationFailed;
         return;
     }
     
-    [self setState:EXECUTING];
+    [self setState:kOperationExecuting];
     
     if (self.isConcurrent) {
         [NSThread detachNewThreadSelector:@selector(performOperation) toTarget:self withObject:nil];        
@@ -69,50 +69,56 @@
 {
     @synchronized(self) {
         
-        NSString *kvcKeyName;
+        NSMutableDictionary *kvcKeys = [NSMutableDictionary dictionaryWithCapacity:2];
         
         switch (state) {
-            case IDLE:
+            case kOperationIdle:
+                break;
+                                
+            case kOperationExecuting:
+                [kvcKeys setObject:@"isExecuting" forKey:[NSNumber numberWithBool:YES]];
+                [kvcKeys setObject:@"isFinished" forKey:[NSNumber numberWithBool:NO]];
                 break;
                 
-            case QUEUED:
+            case kOperationFinished:
+                [kvcKeys setObject:@"isExecuting" forKey:[NSNumber numberWithBool:NO]];
+                [kvcKeys setObject:@"isFinished" forKey:[NSNumber numberWithBool:YES]];
                 break;
                 
-            case EXECUTING:
-                kvcKeyName = @"isExecuting";
-                break;
-                
-            case FINISHED:
-                kvcKeyName = @"isFinished";
-                break;
-                
-            case FAILED:
+            case kOperationFailed:
                 if (self.retryAttempts-- >= 0) {
-                    // Retry
+                    // TODO Retry
+                }
+                else {
+                    // TODO Finish
                 }
                 break;
+                
+            default:
+                break;
         }
         
-        if (kvcKeyName) {
-            [self willChangeValueForKey:kvcKeyName];
-        }
+        [kvcKeys enumerateKeysAndObjectsUsingBlock:^(id key, id obj, BOOL *stop) {
+            [self willChangeValueForKey:key];
+        }];
         
         _state = state;
-        
-        if (kvcKeyName) {
-            [self didChangeValueForKey:kvcKeyName];
-        }
+
+        [kvcKeys enumerateKeysAndObjectsUsingBlock:^(id key, id obj, BOOL *stop) {
+            [self didChangeValueForKey:key];
+        }];
+
     }
 }
 
 - (BOOL)isExecuting
 {
-    return self.state == EXECUTING;
+    return self.state == kOperationExecuting;
 }
 
 - (BOOL)isFinished
 {
-    return self.state == FINISHED || self.state == FAILED;
+    return self.state == kOperationFinished || self.state == kOperationFailed;
 }
 
 @end

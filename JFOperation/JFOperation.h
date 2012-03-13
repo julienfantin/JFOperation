@@ -9,11 +9,11 @@
 #import <Foundation/Foundation.h>
 
 typedef enum JFOperationState {
-    IDLE,
-    QUEUED,
-    EXECUTING,
-    FINISHED,
-    FAILED
+    kOperationIdle,
+    kOperationExecuting,
+    kOperationFinished,
+    kOperationFailed,
+    kOperationStates
 } JFOperationState;
 
 @interface JFOperation : NSOperation
