@@ -8,6 +8,17 @@
 
 #import <Foundation/Foundation.h>
 
-@interface JFOperation : NSObject
+typedef enum JFOperationState {
+    IDLE,
+    QUEUED,
+    EXECUTING,
+    FINISHED,
+    FAILED
+} JFOperationState;
+
+@interface JFOperation : NSOperation
+
+@property (nonatomic, readonly) JFOperationState state;
+@property (atomic, readwrite) NSInteger retryAttempts;
 
 @end

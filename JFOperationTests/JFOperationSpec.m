@@ -1,21 +1,24 @@
 #import "Kiwi.h"
+#import "JFOperation.h"
+
 
 SPEC_BEGIN(JFOperationSpec)
 
 describe(@"Basic usage", ^{
-   
-    context(@"Successfull operation", ^{
-        
+
+    __block NSOperationQueue *mainQueue;
+    __block NSOperationQueue *queue;
+
+    beforeAll(^{
+        mainQueue = [NSOperationQueue mainQueue];
+        queue = [NSOperationQueue new];
     });
-    
-    context(@"Unrecoverable operation", ^{
-        
+
+    __block JFOperation *operation;
+
+    beforeEach(^{
+        operation = [JFOperation new];
     });
-    
-    context(@"Recoverable operation", ^{
-        
-    });
-    
 });
 
 describe(@"Results", ^{
@@ -38,6 +41,21 @@ describe(@"Concurrency", ^{
     context(@"Running an operation from a background thread", ^{
         
     });
+});
+
+describe(@"viewControllerDelegate" , ^{
+
+    describe(@"activityIndicatorView", ^{
+        
+        it(@"Should call the startAnimating method upon starting", ^{
+            
+        });
+        
+        it(@"should call the stopAnimating method upon finishing", ^{
+            
+        });
+    });
+    
 });
 
 SPEC_END

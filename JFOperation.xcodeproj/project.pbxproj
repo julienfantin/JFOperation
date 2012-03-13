@@ -486,6 +486,7 @@
 				GCC_PREFIX_HEADER = "JFOperation/JFOperation-Prefix.pch";
 				HEADER_SEARCH_PATHS = "Frameworks/Kiwi/**";
 				INFOPLIST_FILE = "JFOperationTests/JFOperationTests-Info.plist";
+				OTHER_LDFLAGS = "-all_load";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				USER_HEADER_SEARCH_PATHS = "";
 				WRAPPER_EXTENSION = octest;
@@ -503,6 +504,7 @@
 				GCC_PREFIX_HEADER = "JFOperation/JFOperation-Prefix.pch";
 				HEADER_SEARCH_PATHS = "Frameworks/Kiwi/**";
 				INFOPLIST_FILE = "JFOperationTests/JFOperationTests-Info.plist";
+				OTHER_LDFLAGS = "-all_load";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				USER_HEADER_SEARCH_PATHS = "";
 				WRAPPER_EXTENSION = octest;
