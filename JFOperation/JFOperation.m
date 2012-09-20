@@ -10,53 +10,161 @@
 
 @interface JFOperation ()
 @property (nonatomic, readwrite) JFOperationState state;
-- (void)performOperation;
+- (void)asynchronousMain;
+- (void)markAsReady;
+- (void)markAsStarted;
 @end
 
 @implementation JFOperation
-{
-    JFOperationState _state;
-}
 
 @synthesize state = _state;
 @synthesize retryAttempts = _retryAttempts;
+@synthesize isConcurrent = __isConcurrent;
+
+@synthesize mainBlock = _mainBlock;
+
+@synthesize onReady = _onReady;
+@synthesize onStart = _onStart;
+@synthesize onResult = _onResult;
+@synthesize onFinishWithResult = _onFinishWithResult;
+@synthesize onFinish = _onFinish;
+@synthesize onFail = _onFail;
+
+@synthesize delegate = _delegate;
 
 #pragma mark - NSOperationQueue related
 
 - (void)start
-{
+{    
     if (self.isCancelled) {
         self.state = kOperationFailed;
         return;
     }
     
-    [self setState:kOperationExecuting];
-    
+    [self markAsReady];
+
+    [self markAsStarted];
+
+    // TODO GCD dispatch
     if (self.isConcurrent) {
-        [NSThread detachNewThreadSelector:@selector(performOperation) toTarget:self withObject:nil];        
+        if (self.mainBlock != nil) {
+
+            dispatch_block_t block = ^{
+                self.mainBlock(self);
+            };
+            dispatch_queue_t queue = dispatch_get_main_queue();
+            dispatch_async(queue, block);
+        }
+        else {
+            [self performSelectorInBackground:@selector(asynchronousMain) withObject:nil];
+        }
     }
     else {
-        [self main];
+        if (self.mainBlock != nil) {
+            self.mainBlock(self);
+        }
+        else {
+            [self performSelectorOnMainThread:@selector(main) withObject:nil waitUntilDone:NO];
+        }
     }
 }
 
-- (void)performOperation
+- (void)main
+{
+    [NSException raise:@"Abstract Method" format:@"Override this method in your subclass."];
+}
+
+- (void)asynchronousMain
 {
     @autoreleasepool {
-        
-        // Actually do something
-        [self main];
-                
-        // Wait until it's done
-        while (1) {
+        @synchronized(self) {
             
-            if (self.isCancelled || self.isFinished) break;
-            
-            // Make sure we schedule on the current run loop so that we can trigger NSURLConnection
-            // with a concurrent operation, i.e. from a background thread.
-            [[NSRunLoop currentRunLoop] runMode:NSDefaultRunLoopMode beforeDate:[NSDate distantFuture]];
+            [self main];
+
+            while (!self.isCancelled && !self.isFinished) {
+                [[NSRunLoop currentRunLoop] runMode:NSDefaultRunLoopMode beforeDate:[NSDate distantFuture]];
+            }
         }
     }
+}
+
+- (void)markAsReady
+{
+    self.state = kOperationIdle;
+    
+    if ([self.delegate respondsToSelector:@selector(operationWillStart:)]) {
+        [self.delegate operationWillStart:self];
+    }
+    
+    if (self.onReady != nil) {
+        self.onReady(self);
+    }
+}
+
+- (void)markAsStarted
+{
+    self.state = kOperationExecuting;
+
+    if ([self.delegate respondsToSelector:@selector(operationDidStart:)]) {
+        [self.delegate operationDidStart:self];
+    }
+    
+    if (self.onStart != nil) {
+        self.onStart(self);
+    }
+}
+
+- (void)signalTransientResult:(id)result
+{
+    if ([self.delegate respondsToSelector:@selector(operation:didProduceTransientResult:)]) {
+        [self.delegate operation:self didProduceTransientResult:result];
+    }
+    
+    if (self.onResult != nil) {
+        self.onResult(self, result);
+    }
+}
+
+- (void)markAsFinishedWithResult:(id)result
+{
+    if ([self.delegate respondsToSelector:@selector(operation:didFinishWithResult:)]) {
+        [self.delegate operation:self didFinishWithResult:result];
+    }
+    
+    if (self.onFinishWithResult != nil) {
+        self.onFinishWithResult(self, result);
+    }
+}
+
+- (void)markAsFinished
+{
+    if ([self.delegate respondsToSelector:@selector(operationDidFinish:)]) {
+        [self.delegate operationDidFinish:self];
+    }
+
+    if (self.onFinish != nil) {
+        self.onFinish(self);
+    }
+    
+    self.state = kOperationFinished;
+}
+
+- (void)markAsFailed
+{
+    if (self.retryAttempts-- > 0) {
+        [self start];
+        return;
+    }
+    
+    if ([self.delegate respondsToSelector:@selector(operationDidFail:)]) {
+        [self.delegate operationDidFail:self];
+    }
+    
+    if (self.onFail != nil) {
+        self.onFail(self);
+    }
+    
+    self.state = kOperationFailed;
 }
 
 #pragma mark - State
@@ -69,29 +177,38 @@
 {
     @synchronized(self) {
         
-        NSMutableDictionary *kvcKeys = [NSMutableDictionary dictionaryWithCapacity:2];
+        if (state == _state) {
+            return;
+        }
         
+        if (self.isConcurrent == NO) {
+            // No need for KVO notifications in a non-concurrent operation
+            _state = state;
+            return;
+        }
+        
+        NSMutableDictionary *kvcKeys = [NSMutableDictionary dictionaryWithCapacity:2];
+                
         switch (state) {
+                
             case kOperationIdle:
                 break;
                                 
             case kOperationExecuting:
+                
                 [kvcKeys setObject:@"isExecuting" forKey:[NSNumber numberWithBool:YES]];
                 [kvcKeys setObject:@"isFinished" forKey:[NSNumber numberWithBool:NO]];
                 break;
                 
             case kOperationFinished:
+                
                 [kvcKeys setObject:@"isExecuting" forKey:[NSNumber numberWithBool:NO]];
                 [kvcKeys setObject:@"isFinished" forKey:[NSNumber numberWithBool:YES]];
                 break;
                 
             case kOperationFailed:
-                if (self.retryAttempts-- >= 0) {
-                    // TODO Retry
-                }
-                else {
-                    // TODO Finish
-                }
+                [kvcKeys setObject:@"isExecuting" forKey:[NSNumber numberWithBool:NO]];
+                [kvcKeys setObject:@"isFinished" forKey:[NSNumber numberWithBool:YES]];
                 break;
                 
             default:
@@ -103,22 +220,26 @@
         }];
         
         _state = state;
-
+        
         [kvcKeys enumerateKeysAndObjectsUsingBlock:^(id key, id obj, BOOL *stop) {
             [self didChangeValueForKey:key];
         }];
-
+        
     }
 }
 
 - (BOOL)isExecuting
 {
-    return self.state == kOperationExecuting;
+    @synchronized(self) {
+        return self.state == kOperationExecuting;
+    }
 }
 
 - (BOOL)isFinished
 {
-    return self.state == kOperationFinished || self.state == kOperationFailed;
+    @synchronized(self) {
+        return self.state == kOperationFinished || self.state == kOperationFailed;
+    }
 }
 
 @end
